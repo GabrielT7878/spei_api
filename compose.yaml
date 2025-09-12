@@ -1,0 +1,11 @@
+services:
+  r:
+    image: rocker/r-ver:4.5.1
+    container_name: r-container-api
+    volumes:
+      - .:/home/rstudio/app
+    working_dir: /home/rstudio/app
+    ports:
+      - 8000:8000
+    command: >
+      R -e "source('api.r'); start_server()"

@@ -5,10 +5,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import numpy as np
 import time
+import socket
 
 os.makedirs("check_inputs", exist_ok=True)
 
+scales = [1,3,6,9,12,24]
+date_range = ("1961-01-01", "2024-03-20")
+VAR = "SPI"
+
 def send_request(index_point, ds, scales):
+    print("entry send request")
     ds_tmax = ds['Tmax']
     ds_tmin = ds['Tmin']
     ds_prec = ds['pr']
@@ -24,15 +30,28 @@ def send_request(index_point, ds, scales):
             df_mensal = df.groupby("year_month")[var].mean().reset_index()
         return df_mensal[var].values.tolist()
 
-    url = "http://localhost:8000/spei"
 
-    payload = {
-        "tmin_data": aggregate_data(ds_tmin, 'Tmin'),
-        "tmax_data": aggregate_data(ds_tmax, 'Tmax'),
-        "pr_data": aggregate_data(ds_prec, 'pr'),
-        "lat": round(float(ds_prec['latitude'].values), 2),
-        "scales": scales
-    }
+    url = f"http://localhost:8526/{VAR.lower()}"
+
+    if VAR == "SPEI":
+
+        payload = {
+            "tmin_data": aggregate_data(ds_tmin, 'Tmin'),
+            "tmax_data": aggregate_data(ds_tmax, 'Tmax'),
+            "pr_data": aggregate_data(ds_prec, 'pr'),
+            "lat": round(float(ds_prec['latitude'].values), 2),
+            "scales": scales
+        }
+
+    elif VAR == "SPI":
+        payload = {
+            "pr_data": aggregate_data(ds_prec, 'pr'),
+            "scales": scales
+        }
+    
+    else:
+        raise Exception(f"Varível Inválida ({VAR}): deve ser uma das seguintes: SPEI, SPI")
+
 
     response = requests.post(url, json=payload)
     status_code = response.status_code
@@ -68,8 +87,6 @@ def send_request(index_point, ds, scales):
 
     df = pd.DataFrame(df_dict)
 
-    df.to_csv(f"check_inputs/output_{index_point}.csv", index=False)
-
     return { 
         "df" : df,
         "status_code": f"{status_code}",   
@@ -81,31 +98,58 @@ os.makedirs("api_output", exist_ok=True)
 
 results = []
 
-scales = [3,12]
-date_range = ("1961-01-01", "2024-12-31")
-
-
 print("opening dataset")
-ds = xr.open_dataset("data_cluster_AMAZÔNICA_k0_corrigido.nc")
+file_name = "base_concatenada2.zarr"
+base_path = "/mnt/nfs_mount/" if socket.gethostname() != "irbrerd09" else "/home/publico/"
+path = base_path + file_name
+
+ds = xr.open_zarr(path)
 ds = ds.sel(time=slice(*date_range))
 
-#pontos = 2
-#pontos = len(ds['point'])
-pontos = [1367, 1370, 1371, 1464, 1465, 1467, 1468, 1560, 1561, 1562, 1563, 1564, 1656, 1657, 1658, 1659, 1660, 1754, 1755]
+valid_points = pd.read_csv("valid_points.csv")
+
+batch_size_per_machine = {
+    #"irbrerd02" : (0,0),
+    "irbrerd03" : (0,0),
+    #"irbrerd06" : (0,0),
+    "irbrerd08" : (0,0),
+    "irbrerd09" : (0,0),
+}
+
+start = 0
+for key, value in batch_size_per_machine.items():
+    batch_size_per_machine[key] = (start,start+(len(valid_points) // len(batch_size_per_machine.keys())))
+    start += (len(valid_points) // len(batch_size_per_machine.keys()))
+
+if len(valid_points) % len(batch_size_per_machine.keys()):
+    new_assign = batch_size_per_machine['irbrerd09'][0]
+    batch_size_per_machine['irbrerd09'] = (new_assign,len(valid_points))
+
+print(batch_size_per_machine)
+
+hostname = socket.gethostname()
+print("Escolhido:", hostname, " ", batch_size_per_machine[hostname])
+
+#total_pontos = 100
+batch_range = batch_size_per_machine[hostname]
+#batch_range = (0,100)
+print(f"batch range: {batch_range}")
+valid_points = valid_points[batch_range[0]:batch_range[1]]
+total_pontos = len(valid_points)
 print(ds)
-print(f"Total points: {pontos}")
+print(f"Total points: {total_pontos}")
 print(f"Using {os.cpu_count()} threads for parallel requests.")
 print(f"Date range: {date_range[0]} to {date_range[1]}")
 print(f"Scales: {scales}")
 
-
-ds_points = [ds.sel(point=x) for x in pontos]
+print("selecting points...")
+ds_points = [ds.sel(latitude=row['latitude'], longitude=row['longitude']) for i, row in valid_points[:total_pontos].iterrows()]
 
 # Execute requests in parallel
 start_time = time.time()
 print("Starting requests...")
 with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-    futures = [executor.submit(send_request, index_point+1, ds_points[index_point], scales) for index_point in range(len(pontos))]
+    futures = [executor.submit(send_request, index_point+1, ds_points[index_point], scales) for index_point in range(total_pontos)]
 
     for future in as_completed(futures):
         results.append(future.result())
@@ -126,10 +170,10 @@ ds = (
 )
 
 for scale in scales:
-    ds[f'SPEI_{scale}'] = ds[f'SPEI_{scale}'].astype(np.float32)
+    ds[f'{VAR}_{scale}'] = ds[f'{VAR}_{scale}'].astype(np.float32)
 
 ds['time'] = ds['time'].dt.floor('D')
 
-ds.to_netcdf("api_output/SPEI_amazonica.nc")
+ds.to_netcdf(f"api_output/{VAR}_{hostname}.nc")
 end_time = time.time()
 print(f"Results saved in {end_time - start_time:.2f} seconds.")

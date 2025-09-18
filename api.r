@@ -35,7 +35,7 @@ function(req, res, tmin_data, tmax_data, pr_data, lat, scales) {
     PET_mensal <- hargreaves(Tmin= tmin_data, 
                             Tmax= tmax_data, 
                             lat= lat,
-                            verbose = FALSE)
+                            verbose = FALSE)                     
 
     # Calcular a precipitação líquida mensal (PREC - PET)
     NET_prec_mensal <- pr_data - PET_mensal
@@ -56,12 +56,42 @@ function(req, res, tmin_data, tmax_data, pr_data, lat, scales) {
             distribution = distribution,
             na.rm = TRUE,
             verbose = FALSE
-        )
+        ) 
         # Adicionar ao resultado
         spei_results[[paste0("SPEI_", scale)]] <- as.numeric(spei_mensal$fitted)
     }
 
     return(spei_results)
+}
+
+#* Endpoint Calcular o SPI
+#* @post /spi
+#* @param pr_data
+#* @param scales
+function(req, res, pr_data, scales) {
+    
+    kernel = list(type = "rectangular", shift = 0)
+    distribution = "Gamma"   # Distribuição padrão usada no SPI
+    
+    # Inicializa a lista para resultados
+    spi_results <- list()
+    
+    # Calcular o SPI para cada escala
+    for (scale in scales) {
+        spi_mensal <- spi(
+            pr_data,
+            scale = scale,
+            kernel = kernel,
+            distribution = distribution,
+            na.rm = TRUE,
+            verbose = FALSE
+        )
+        
+        # Adicionar ao resultado
+        spi_results[[paste0("SPI_", scale)]] <- as.numeric(spi_mensal$fitted)
+    }
+    
+    return(spi_results)
 }
 
 #* @get /status
@@ -70,7 +100,7 @@ function(req, res) {
 }
 
 # Função para iniciar o servidor
-start_server <- function(host = "0.0.0.0", port = 8000) {
+start_server <- function(host = "0.0.0.0", port = 8526) {
   cat("Iniciando API do SPEI...\n")
   cat(paste("Servidor disponível em: http://", host, ":", port, "\n", sep = ""))
   

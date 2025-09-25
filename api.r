@@ -71,7 +71,7 @@ function(req, res, tmin_data, tmax_data, pr_data, lat, scales) {
 function(req, res, pr_data, scales) {
     
     kernel = list(type = "rectangular", shift = 0)
-    distribution = "Gamma"   # Distribuição padrão usada no SPI
+    distribution = "log-Logistic"
     
     # Inicializa a lista para resultados
     spi_results <- list()
@@ -100,7 +100,7 @@ function(req, res) {
 }
 
 # Função para iniciar o servidor
-start_server <- function(host = "0.0.0.0", port = 8526) {
+start_server <- function(host = "0.0.0.0", port = 8000) {
   cat("Iniciando API do SPEI...\n")
   cat(paste("Servidor disponível em: http://", host, ":", port, "\n", sep = ""))
   

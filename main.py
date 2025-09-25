@@ -9,9 +9,10 @@ import socket
 
 os.makedirs("check_inputs", exist_ok=True)
 
-scales = [1,3,6,9,12,24]
-date_range = ("1961-01-01", "2024-03-20")
+scales = [1,12]
+date_range = ("1993-01-01", "2024-03-20")
 VAR = "SPI"
+USE_CLUSTERS = True
 
 def send_request(index_point, ds, scales):
     print("entry send request")
@@ -31,7 +32,7 @@ def send_request(index_point, ds, scales):
         return df_mensal[var].values.tolist()
 
 
-    url = f"http://localhost:8526/{VAR.lower()}"
+    url = f"http://localhost:8000/{VAR.lower()}"
 
     if VAR == "SPEI":
 
@@ -116,6 +117,11 @@ batch_size_per_machine = {
     "irbrerd09" : (0,0),
 }
 
+if not USE_CLUSTERS:
+    batch_size_per_machine = {
+        "irbrerd09" : (0,0),
+    }
+
 start = 0
 for key, value in batch_size_per_machine.items():
     batch_size_per_machine[key] = (start,start+(len(valid_points) // len(batch_size_per_machine.keys())))
@@ -132,7 +138,7 @@ print("Escolhido:", hostname, " ", batch_size_per_machine[hostname])
 
 #total_pontos = 100
 batch_range = batch_size_per_machine[hostname]
-#batch_range = (0,100)
+#batch_range = (0,2)
 print(f"batch range: {batch_range}")
 valid_points = valid_points[batch_range[0]:batch_range[1]]
 total_pontos = len(valid_points)
@@ -141,6 +147,8 @@ print(f"Total points: {total_pontos}")
 print(f"Using {os.cpu_count()} threads for parallel requests.")
 print(f"Date range: {date_range[0]} to {date_range[1]}")
 print(f"Scales: {scales}")
+print("VAR:", VAR)
+print("Using Clusters:", USE_CLUSTERS)
 
 print("selecting points...")
 ds_points = [ds.sel(latitude=row['latitude'], longitude=row['longitude']) for i, row in valid_points[:total_pontos].iterrows()]

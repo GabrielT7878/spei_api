@@ -6,6 +6,6 @@ services:
       - .:/home/rstudio/app
     working_dir: /home/rstudio/app
     ports:
-      - 8526:8526
+      - 8000:8000
     command: >
       R -e "source('api.r'); start_server()"

@@ -3,7 +3,7 @@ import time
 import xarray as xr
 import pandas as pd
 
-ds = xr.open_dataset("/home/publico/indice_somente_xavier/SPI.nc")
+ds = xr.open_dataset("/home/publico/spei_api/helpers/SPI_12.nc")
 #print(ds.sel(time='1963-01-31').to_dataframe().reset_index().dropna(subset="SPI_1"))
 print(ds)
 

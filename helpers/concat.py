@@ -3,8 +3,8 @@ import glob
 import pandas as pd
 import numpy as np
 
-VAR = "SPEI"
-scales = [1,3,6,9,12,24]
+VAR = "SPI"
+scales = [12]
 
 ds_paths = glob.glob(f'/home/publico/spei_api/api_output/{VAR}*.nc')
 
@@ -26,8 +26,9 @@ print("Concating..")
 df_concat_final = pd.concat(df_finals, ignore_index=True)
 
 print("Transforming to nc")
+
 ds = (
-    df_concat_final.set_index(["time", "latitude", "longitude"])
+    df_concat_final.set_index(["time", "latitude", "longitude"])['SPI_12']
       .to_xarray()
 )
 
